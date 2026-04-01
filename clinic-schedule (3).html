@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>心臟科門診週表</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang TC',sans-serif;background:#0f1923;color:#e0eaf5;font-size:14px}
+nav{background:#0f1923;border-bottom:1px solid #263548;position:sticky;top:0;z-index:99;padding:12px 12px 0}
+nav h1{font-size:15px;font-weight:800;color:#00bcd4;margin-bottom:8px}
+.tabs{display:flex;overflow-x:auto;gap:4px;scrollbar-width:none;padding-bottom:1px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:8px 14px;font-size:13px;font-weight:700;color:#7a95b0;background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+.tab.on{color:#00bcd4;border-bottom-color:#00bcd4}
+.page{display:none;padding:12px 10px 80px}
+.page.on{display:block}
+.infobar{background:#1a2636;border:1px solid #263548;border-radius:8px;padding:8px 12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.infobar a{color:#00bcd4;border:1px solid #00bcd4;border-radius:4px;padding:2px 7px;text-decoration:none;font-weight:700;font-size:11px}
+.note{font-size:10px;color:#5a7a90;flex:1;text-align:right}
+.dept{margin-top:16px}
+.dept-title{font-size:10px;font-weight:700;color:#7a95b0;letter-spacing:.08em;padding-left:8px;border-left:3px solid #00bcd4;margin-bottom:8px}
+.dr-card{background:#1a2636;border:1px solid #263548;border-radius:10px;margin-bottom:8px;overflow:hidden}
+.dr-header{padding:10px 12px 6px;border-bottom:1px solid #263548}
+.dr-name{font-size:14px;font-weight:800;color:#e0eaf5}
+.dr-sub{font-size:10px;color:#7a95b0;margin-top:2px;line-height:1.4}
+.dr-body{display:grid;grid-template-columns:repeat(6,1fr)}
+.day-col{border-right:1px solid #1e2d3a;text-align:center}
+.day-col:last-child{border-right:none}
+.day-col.tod{background:#1e3550}
+.day-head{font-size:9px;font-weight:700;color:#7a95b0;padding:4px 2px;border-bottom:1px solid #1e2d3a}
+.day-head.tod{color:#00bcd4}
+.sess-row{padding:4px 2px;border-bottom:1px solid #1a2535;min-height:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.sess-row:last-child{border-bottom:none}
+.sess-row.editable{cursor:pointer}
+.sess-row.editable:active{background:#263548}
+.s-tag{font-size:8px;font-weight:700;border-radius:3px;padding:1px 3px}
+.s-am{background:#162d47;color:#6ab0f5}
+.s-pm{background:#352500;color:#f5a623}
+.s-eve{background:#0d2318;color:#4cde80}
+.status{font-size:10px;font-weight:700}
+.status.has{color:#4caf50}
+.status.off{color:#f44336}
+.status.none{color:#2e4155}
+.status.echo{color:#ab47bc}
+.status.cath{color:#29b6f6}
+.status.op{color:#ff7043}
+.status.dnd{color:#ef5350}
+.status.ok{color:#66bb6a}
+.status.echo{color:#ab47bc}
+.status.cath{color:#29b6f6}
+.status.op{color:#ff7043}
+.loc{font-size:8px;color:#7a95b0;line-height:1}
+
+/* 鎖定按鈕 */
+.lock-btn{position:fixed;bottom:20px;right:16px;background:#1a2636;border:1px solid #263548;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;z-index:98;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.lock-btn.unlocked{border-color:#00bcd4;background:#0d2530}
+.export-btn{position:fixed;bottom:20px;right:68px;background:#00bcd4;border:none;border-radius:22px;height:44px;padding:0 16px;font-size:13px;font-weight:800;color:#000;cursor:pointer;z-index:98;display:none;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.export-btn.show{display:flex}
+
+/* Overlay 通用 */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200}
+.overlay.on{display:flex;align-items:flex-end;justify-content:center}
+.panel{background:#1a2636;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 40px;border-top:1px solid #263548}
+.panel h3{font-size:15px;font-weight:800;color:#00bcd4;margin-bottom:16px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;color:#7a95b0;margin-bottom:4px}
+.field select,.field input{width:100%;background:#263548;border:1px solid #3a506a;border-radius:8px;color:#e0eaf5;padding:10px 12px;font-size:14px;outline:none}
+.field .info-val{background:#0f1923;border-radius:6px;padding:8px 12px;font-size:13px;font-weight:700}
+.btns{display:flex;gap:8px;margin-top:20px}
+.btn{flex:1;padding:13px;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer}
+.btn-ok{background:#00bcd4;color:#000}
+.btn-no{background:#263548;color:#7a95b0}
+.err{color:#f44336;font-size:12px;margin-top:6px;display:none}
+</style>
+</head>
+<body>
+
+<nav>
+  <h1>🫀 心臟科門診週表</h1>
+  <div class="tabs" id="TABS"></div>
+</nav>
+<div id="ROOT"></div>
+
+<!-- 匯出按鈕 -->
+<button class="export-btn" id="exportBtn" onclick="exportHtml()">⬇︎ 匯出 HTML</button>
+
+<!-- 鎖定/解鎖按鈕 -->
+<button class="lock-btn" id="lockBtn" onclick="toggleLock()" title="編輯模式">🔒</button>
+
+<!-- 密碼面板 -->
+<div class="overlay" id="pwdOvl">
+  <div class="panel">
+    <h3>🔐 輸入編輯密碼</h3>
+    <div class="field">
+      <label>密碼</label>
+      <input type="password" id="pwdInput" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')checkPwd()">
+      <div class="err" id="pwdErr">密碼錯誤，請再試一次</div>
+    </div>
+    <div class="btns">
+      <button class="btn btn-no" onclick="closePwd()">取消</button>
+      <button class="btn btn-ok" onclick="checkPwd()">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- 編輯面板 -->
+<div class="overlay" id="editOvl">
+  <div class="panel">
+    <h3>✏️ 編輯門診</h3>
+    <div class="field"><label>醫師</label><div class="info-val" id="E_DR"></div></div>
+    <div class="field"><label>時間</label><div class="info-val" id="E_TIME"></div></div>
+    <div class="field">
+      <label>狀態</label>
+      <select id="E_ST">
+        <option value="has">✅ 有診</option>
+        <option value="none">— 無診</option>
+        <option value="off">❌ 休診/停診</option>
+        <option value="echo">🔊 超音波室</option>
+        <option value="cath">💉 導管室</option>
+        <option value="op">🏥 手術時段</option>
+        <option value="dnd">🔴 其他－勿擾</option>
+        <option value="ok">🟢 其他－可擾</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>院區備註（選填）</label>
+      <input id="E_LOC" type="text" placeholder="例：桃園、台北、土城">
+    </div>
+    <div class="btns">
+      <button class="btn btn-no" onclick="closeEdit()">取消</button>
+      <button class="btn btn-ok" onclick="saveEdit()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// ★ 密碼請在這裡修改 ★
+var PASSWORD = 'cardiac2026';
+// ══════════════════════════════════════════
+
+var unlocked = false;
+var DAYS=['週一','週二','週三','週四','週五','週六'];
+var SK=['am','pm','eve'];
+var SL=['早','午','晚'];
+var SC=['s-am','s-pm','s-eve'];
+var todayIdx=(function(){var d=new Date().getDay();return d===0?-1:d-1;})();
+function gv(c){return c&&typeof c==='object'?c.v:c;}
+function gl(c){return c&&typeof c==='object'?c.loc:'';}
+
+var DATA=[
+{id:'vghtpe',name:'台北榮總',
+ links:[{t:'掛號/進度',u:'https://www6.vghtpe.gov.tw/reg/realTime.do?type=realtime&time=0&sec=003-103-203-0MV-1MV-2MV'},{t:'門診表PDF',u:'https://www6.vghtpe.gov.tw/reg/download/opdtab.pdf'}],
+ note:'115年4月官方門診表（人工逐格核對）',
+ depts:[
+  {name:'心臟內科（003/103，三門診3樓）',drs:[
+   {n:'宋思賢',sub:'週一、二上午',s:[{am:'has',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'李慶威',sub:'週一上午｜隔週一下午(微創瓣膜1MV)｜單週四下午(二尖瓣1MC)',s:[{am:'has',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'蔡依霖',sub:'週一上、下午｜週五上午',s:[{am:'has',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'陳素真',sub:'週二上、下午｜週五上午',s:[{am:'none',pm:'none',eve:'none'},{am:'has',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'張俊欽',sub:'週二上午｜週四下午｜週五上午',s:[{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'陳嬰華',sub:'週三上午｜週五上午+下午(瓣膜特診)',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+  ]},
+  {name:'心臟外科（034/134，三門診3樓）',drs:[
+   {n:'張效煌',sub:'週一上、下午(瓣膜特診)｜隔週三上午',s:[{am:'has',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'許喬博',sub:'週一下午｜週三上午｜週四下午',s:[{am:'none',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+  ]},
+ ]},
+{id:'chgh',name:'振興醫院',
+ links:[{t:'掛號/進度',u:'https://reg.chgh.org.tw/allroom_cload.aspx'},{t:'門診表',u:'https://www.chgh.org.tw/Service/schedule_detail.aspx?ArticleID=MjAyNDExMTkwMDA1'}],
+ note:'振興醫院門診表（人工核對）',
+ depts:[
+  {name:'心臟血管內科',drs:[
+   {n:'殷偉賢',sub:'週一夜間(限複雜瓣膜治療約診)｜週三下午+夜診',s:[{am:'none',pm:'none',eve:'has'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'has'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'林煥湫',sub:'週四上午｜週五下午｜雙週六上午',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'none'},{am:'has',pm:'none',eve:'none'}]},
+  ]},
+  {name:'心臟血管外科',drs:[
+   {n:'陳怡誠',sub:'週五下午',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'蔡佳儒',sub:'週五下午',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+  ]},
+ ]},
+{id:'ntuh',name:'台大醫院',
+ links:[{t:'掛號/進度',u:'https://reg.ntuh.gov.tw/WebAdministration/OPDOnlineRegister.aspx'}],
+ note:'台大醫院掛號系統（人工核對）',
+ depts:[
+  {name:'心臟內科',drs:[
+   {n:'林茂欣',sub:'週三上午(限約診)｜週五上午(TAVI/瓣膜)',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'陳盈憲',sub:'週三上、下午',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'許如瑩',sub:'週二下午+夜間(新竹)｜週三上午(竹北生醫)',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'has'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'謝慕洋(新竹台大)',sub:'週一、三上午',s:[{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+  ]},
+ ]},
+{id:'cgmh',name:'林口長庚',
+ links:[{t:'掛號/進度',u:'https://register.cgmh.org.tw/Progress/3'},{t:'門診表',u:'https://register.cgmh.org.tw/Department_WEEK/3/31700A317A0A317B0A'}],
+ note:'115年3-4月官方門診表（人工核對）',
+ depts:[
+  {name:'心臟內一科',drs:[
+   {n:'林佳濱',sub:'週一下午(林口)｜週四下午(桃園)｜單週五下午(桃園)',s:[{am:'none',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:{v:'has',loc:'桃園'},eve:'none'},{am:'none',pm:{v:'has',loc:'桃園'},eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'張其任',sub:'★台北長庚｜週二下午｜週三上午｜週五下午(台北)',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'has',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:{v:'has',loc:'台北'},eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'蕭富致',sub:'單週一上午(林口)｜週一下午(桃園)｜雙週三下午(土城)｜週五上午(台北)',s:[{am:{v:'has',loc:'單週'},pm:{v:'has',loc:'桃園'},eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:{v:'has',loc:'土城'},eve:'none'},{am:'none',pm:'none',eve:'none'},{am:{v:'has',loc:'台北'},pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+  ]},
+  {name:'心臟內二科',drs:[
+   {n:'葉日凱',sub:'週一上午(台北)｜週二上午(桃園)+下午(林口)｜週五上午(桃園)',s:[{am:{v:'has',loc:'台北'},pm:'none',eve:'none'},{am:{v:'has',loc:'桃園'},pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:{v:'has',loc:'桃園'},pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'王朝永',sub:'週一上午(桃園)｜週五上、下午(林口)',s:[{am:{v:'has',loc:'桃園'},pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'謝明哲',sub:'週一上、下午(桃園)｜單週四下午(林口)｜週五下午(林口)',s:[{am:{v:'has',loc:'桃園'},pm:{v:'has',loc:'桃園'},eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:{v:'has',loc:'單週'},eve:'none'},{am:'none',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'謝宜璋',sub:'週一下午(台北)｜週三上午(桃園)+下午(林口)｜週五上午(林口)',s:[{am:'none',pm:{v:'has',loc:'台北'},eve:'none'},{am:'none',pm:'none',eve:'none'},{am:{v:'has',loc:'桃園'},pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+  ]},
+  {name:'心臟外科',drs:[
+   {n:'陳紹緯',sub:'週一下午｜週四上午',s:[{am:'none',pm:'has',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+  ]},
+ ]},
+{id:'vghtc',name:'台中榮總',
+ links:[{t:'掛號/進度',u:'https://register.vghtc.gov.tw/register/listDoctor.jsp?init=sub&section=CV'}],
+ note:'台中榮總掛號系統（人工核對）',
+ depts:[
+  {name:'心臟內科',drs:[
+   {n:'劉尊睿',sub:'TAVI/結構性心臟病｜週三上午(屏東榮總)｜週六上午',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:{v:'has',loc:'屏東榮總'},pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'}]},
+   {n:'莊宇權',sub:'週二下午(清泉醫院)｜週四、五上午',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:{v:'has',loc:'清泉醫院'},eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'林維文',sub:'週二、四上午',s:[{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'王奇彥',sub:'週二、五上午',s:[{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'梁凱偉',sub:'週三、四上午',s:[{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+   {n:'李文領',sub:'週二、四上午',s:[{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'has',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'},{am:'none',pm:'none',eve:'none'}]},
+  ]},
+ ]},
+];
+
+// ── 密碼功能 ──────────────────────────────
+function toggleLock(){
+  if(unlocked){ lock(); }
+  else{ document.getElementById('pwdOvl').classList.add('on'); setTimeout(function(){document.getElementById('pwdInput').focus();},100); }
+}
+function checkPwd(){
+  var val=document.getElementById('pwdInput').value;
+  if(val===PASSWORD){
+    unlocked=true;
+    document.getElementById('pwdInput').value='';
+    document.getElementById('pwdErr').style.display='none';
+    document.getElementById('pwdOvl').classList.remove('on');
+    document.getElementById('lockBtn').textContent='🔓';
+    document.getElementById('lockBtn').classList.add('unlocked');
+    document.getElementById('exportBtn').classList.add('show');
+    renderAll();
+  } else {
+    document.getElementById('pwdErr').style.display='block';
+    document.getElementById('pwdInput').value='';
+    document.getElementById('pwdInput').focus();
+  }
+}
+function closePwd(){
+  document.getElementById('pwdOvl').classList.remove('on');
+  document.getElementById('pwdInput').value='';
+  document.getElementById('pwdErr').style.display='none';
+}
+function lock(){
+  unlocked=false;
+  document.getElementById('lockBtn').textContent='🔒';
+  document.getElementById('lockBtn').classList.remove('unlocked');
+  document.getElementById('exportBtn').classList.remove('show');
+  renderAll();
+}
+
+function exportHtml(){
+  // 把目前 DATA 序列化後嵌入新的 HTML 並下載
+  var dataStr = JSON.stringify(DATA, null, 1);
+  var html = document.documentElement.outerHTML;
+  // 替換 DATA 區塊
+  var newHtml = html.replace(
+    /var DATA=\[[\s\S]*?\];(\s*\/\/ ── 密碼功能)/,
+    'var DATA='+dataStr+';\n$1'
+  );
+  var blob = new Blob([newHtml], {type:'text/html;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'index.html';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── 渲染 ──────────────────────────────────
+function renderAll(){
+  var tabs=document.getElementById('TABS');
+  var root=document.getElementById('ROOT');
+  var activeId=null;
+  var activeTab=document.querySelector('.tab.on');
+  if(activeTab) activeId=activeTab.getAttribute('data-id');
+  tabs.innerHTML='';
+  root.innerHTML='';
+
+  DATA.forEach(function(hosp,hi){
+    var isActive=(activeId ? activeId===hosp.id : hi===0);
+    var btn=document.createElement('button');
+    btn.className='tab'+(isActive?' on':'');
+    btn.textContent=hosp.name;
+    btn.setAttribute('data-id',hosp.id);
+    btn.onclick=function(){
+      document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('on')});
+      document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on')});
+      btn.classList.add('on');
+      document.getElementById('P'+hi).classList.add('on');
+    };
+    tabs.appendChild(btn);
+
+    var page=document.createElement('div');
+    page.className='page'+(isActive?' on':'');
+    page.id='P'+hi;
+
+    var ib='<div class="infobar">';
+    hosp.links.forEach(function(l){ib+='<a href="'+l.u+'" target="_blank">'+l.t+'</a>';});
+    ib+='<span class="note">'+hosp.note+'</span></div>';
+    page.innerHTML=ib;
+
+    hosp.depts.forEach(function(dept,di){
+      var dDiv=document.createElement('div');
+      dDiv.className='dept';
+      dDiv.innerHTML='<div class="dept-title">'+dept.name+'</div>';
+      dept.drs.forEach(function(dr,dri){
+        var card=document.createElement('div');
+        card.className='dr-card';
+        var hdr='<div class="dr-header"><div class="dr-name">'+dr.n+'</div>';
+        if(dr.sub) hdr+='<div class="dr-sub">'+dr.sub+'</div>';
+        hdr+='</div>';
+        var body='<div class="dr-body">';
+        for(var d=0;d<6;d++){
+          var tod=d===todayIdx;
+          body+='<div class="day-col'+(tod?' tod':'')+'"><div class="day-head'+(tod?' tod':'')+'">'+DAYS[d]+'</div>';
+          for(var si=0;si<3;si++){
+            var cell=dr.s[d][SK[si]];
+            var v=gv(cell),loc=gl(cell);
+            var stCls=v==='has'?'has':v==='off'?'off':v==='echo'?'echo':v==='cath'?'cath':v==='op'?'op':v==='dnd'?'dnd':v==='ok'?'ok':'none';
+            var stTxt=v==='has'?'有診':v==='off'?'休診':v==='echo'?'超音波':v==='cath'?'導管室':v==='op'?'手術':v==='dnd'?'勿擾':v==='ok'?'可擾':'—';
+            var locTxt=loc?'<div class="loc">'+loc+'</div>':'';
+            var editAttr=unlocked?(' onclick="openEdit('+hi+','+di+','+dri+','+d+','+si+')"'):'';
+            var editCls=unlocked?' editable':'';
+            body+='<div class="sess-row'+editCls+'"'+editAttr+'>'
+              +'<span class="s-tag '+SC[si]+'">'+SL[si]+'</span>'
+              +'<span class="status '+stCls+'">'+stTxt+'</span>'
+              +locTxt+'</div>';
+          }
+          body+='</div>';
+        }
+        body+='</div>';
+        card.innerHTML=hdr+body;
+        dDiv.appendChild(card);
+      });
+      page.appendChild(dDiv);
+    });
+    root.appendChild(page);
+  });
+}
+
+// ── 編輯 ──────────────────────────────────
+var ctx=null;
+function openEdit(hi,di,dri,d,si){
+  if(!unlocked) return;
+  ctx={hi:hi,di:di,dri:dri,d:d,si:si};
+  var dr=DATA[hi].depts[di].drs[dri];
+  var cell=dr.s[d][SK[si]];
+  document.getElementById('E_DR').textContent=dr.n;
+  document.getElementById('E_TIME').textContent=DAYS[d]+' '+['早診','午診','夜診'][si];
+  document.getElementById('E_ST').value=gv(cell)||'none';
+  document.getElementById('E_LOC').value=gl(cell)||'';
+  document.getElementById('editOvl').classList.add('on');
+}
+function closeEdit(){
+  document.getElementById('editOvl').classList.remove('on');
+  ctx=null;
+}
+function saveEdit(){
+  if(!ctx) return;
+  var v=document.getElementById('E_ST').value;
+  var loc=document.getElementById('E_LOC').value.trim();
+  var dr=DATA[ctx.hi].depts[ctx.di].drs[ctx.dri];
+  dr.s[ctx.d][SK[ctx.si]]=(v==='has'&&loc)?{v:'has',loc:loc}:v;
+  closeEdit();
+  renderAll();
+}
+
+// 點背景關閉
+document.getElementById('pwdOvl').addEventListener('click',function(e){if(e.target===this)closePwd();});
+document.getElementById('editOvl').addEventListener('click',function(e){if(e.target===this)closeEdit();});
+
+renderAll();
+</script>
+</body>
+</html>
